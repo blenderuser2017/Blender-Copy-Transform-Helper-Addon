@@ -33,7 +33,8 @@ The Copy Transforms Helper panel can be found in the N-panel in the 3D Viewport.
 Compatibility:
 This add-on is compatible with Blender version 2.90.0 and newer.
 
-Can reuse the same constraint. I dont know how, but you are more than free to look at it.
+Can reuse the same constraint. I dont know how it works on the coding side, but you are more than free to look at it. but as long as you have
+only once constaint that has an influence of 1, it should work seamlessly. 
 
 Credits:
 This add-on was created by ChatGPT, and I suffered for it
