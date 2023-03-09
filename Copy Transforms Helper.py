@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Copy Transforms Helper",
     "author": "Blender User 2017",
-    "version": (1, 0),
+    "version": (1, 1),
     "blender": (2, 90, 0),
     "location": "View3D > N Panel",
     "description": "A set of tools to assist with copying transforms between bones.",
@@ -10,34 +10,87 @@ bl_info = {
 
 
 import bpy
+from mathutils import Matrix
 
 class AlignHandlesOperator(bpy.types.Operator):
-    """Align handles"""
+    """Operator for aligning handles"""
     bl_idname = "pose.align_handles_operator"
-    bl_label = "Align Bones"
-    
+    bl_label = "Align Handles"
+
+    def apply_copy_rotation_constraint(self, target_bone, holding_bone):
+        # Get the original transformation matrix of the holding bone
+        holding_bone_matrix_orig = holding_bone.matrix.copy()
+
+        # Create the copy rotation constraint
+        copy_rotation_constraint = holding_bone.constraints.new('COPY_ROTATION')
+        copy_rotation_constraint.target = target_bone.id_data
+        copy_rotation_constraint.subtarget = target_bone.name
+        copy_rotation_constraint.influence = 1.0
+
+        # Update the scene to apply the constraint
+        bpy.context.view_layer.update()
+
+        # Return the constraint and original matrix
+        return copy_rotation_constraint, holding_bone_matrix_orig
+
     def execute(self, context):
+        # Get the active pose bone
         active_bone = context.active_pose_bone
+
+        # Get the selected pose bones
         selected_bones = context.selected_pose_bones
-        
-        if not active_bone or not selected_bones:
-            self.report({'ERROR'}, "Please select an active bone and at least one other bone to align handles.")
+
+        if len(selected_bones) != 2:
+            self.report({'ERROR'}, "Please select two bones to enable the link.")
             return {'CANCELLED'}
-        
+
+        # Find the target and holding bones
+        if selected_bones[0].id_data == selected_bones[1].id_data:
+            if selected_bones[0] == active_bone:
+                target_bone = selected_bones[1]
+                holding_bone = selected_bones[0]
+            else:
+                target_bone = selected_bones[0]
+                holding_bone = selected_bones[1]
+        else:
+            if selected_bones[0].id_data == active_bone.id_data:
+                target_bone = selected_bones[1]
+                holding_bone = selected_bones[0]
+            elif selected_bones[1].id_data == active_bone.id_data:
+                target_bone = selected_bones[0]
+                holding_bone = selected_bones[1]
+            else:
+                # Swap the order of the selected bones to match the order of the active bone
+                if active_bone.id_data == selected_bones[0].id_data:
+                    target_bone = selected_bones[1]
+                    holding_bone = selected_bones[0]
+                else:
+                    target_bone = selected_bones[0]
+                    holding_bone = selected_bones[1]
+
+                if target_bone.id_data != holding_bone.id_data:
+                    self.report({'ERROR'}, "Please select two bones from the same armature to enable the link.")
+                    return {'CANCELLED'}
+
         try:
             active_bone_rotation = active_bone.rotation_quaternion.copy()
-            for bone in selected_bones:
-                if bone != active_bone:
-                    bone.rotation_quaternion = active_bone_rotation.copy()
-                    
-                    if context.scene.set_rotation_keyframes:
-                        bone.keyframe_insert(data_path='rotation_quaternion')
+            copy_rotation_constraint, holding_bone_matrix_orig = self.apply_copy_rotation_constraint(target_bone, holding_bone)
         except AttributeError as e:
             self.report({'ERROR'}, "Error aligning handles: {}".format(str(e)))
             return {'CANCELLED'}
-                
+
+        # Apply visual transform and delete constraint
+        bpy.ops.pose.visual_transform_apply()
+        holding_bone.constraints.remove(copy_rotation_constraint)
+
+        # Insert the rotation keyframe for the holding bone if set_rotation_keyframes is True
+        if context.scene.set_rotation_keyframes:
+            holding_bone.keyframe_insert(data_path='rotation_quaternion')
+
         self.report({'INFO'}, "Handles aligned successfully.")
         return {'FINISHED'}
+
+
 
 
 class EnableLinkOperator(bpy.types.Operator):
@@ -194,4 +247,5 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
 
